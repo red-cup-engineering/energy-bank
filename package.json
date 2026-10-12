@@ -1,0 +1,59 @@
+{
+  "name": "@red-cup-engineering/energy-bank",
+  "version": "0.3.1",
+  "type": "module",
+  "description": "Shared identity and a double-entry ENERGY/credits ledger for every 561 game: guest/durable accounts, an append-only balanced-postings ledger weighed in exact decimal arithmetic at any commodity's own precision, executable invariant checks (books balance, no negative balances without an explicit credit line, payouts never exceed verified revenue in the same commodity), player-to-player transfer and pooling, and a pluggable settlement-backend interface (an in-memory mock plus a ZBD/Lightning-shaped stub) that an on-chain backend can join later with no schema change.",
+  "keywords": [
+    "561-group",
+    "cartridge",
+    "ledger",
+    "double-entry",
+    "energy",
+    "accounts",
+    "settlement",
+    "earn-only"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/red-cup-engineering/bare-cedar-fog.git",
+    "directory": "services/561-group/services/engineering-services-section/services/computer-engineering-services-section/services/computer-systems-engineering-services-section/services/computer-game-system-services-section/services/energy-bank"
+  },
+  "scripts": {
+    "check": "for f in src/*.mjs; do node --check \"$f\" || exit 1; done",
+    "test": "node --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "@red-cup-engineering/computer-text-content-engineering-services-section": "workspace:*",
+    "@red-cup-engineering/cryptographic-computer-data-engineering-services-section": "workspace:*",
+    "@red-cup-engineering/computer-data-engineering-services-section": "workspace:*"
+  },
+  "exports": {
+    "./decimal": {
+      "default": "./src/decimal.mjs"
+    },
+    "./accounts": {
+      "default": "./src/accounts.mjs"
+    },
+    "./ledger": {
+      "default": "./src/ledger.mjs"
+    },
+    "./invariants": {
+      "default": "./src/invariants.mjs"
+    },
+    "./transfer": {
+      "default": "./src/transfer.mjs"
+    },
+    "./settlement": {
+      "default": "./src/settlement.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "sideEffects": false,
+  "files": [
+    "src",
+    "README.md"
+  ]
+}
