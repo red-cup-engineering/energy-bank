@@ -51,10 +51,11 @@ test("resolveBackend(): prefers the requested backend if it's configured", () =>
   assert.equal(resolved.id, "zbd");
 });
 
-test("resolveBackend(): falls through to another configured backend if the requested one isn't configured", () => {
+test("resolveBackend(): an explicitly requested unavailable rail cannot fall back to a different provider or mock", () => {
   const zbd = zbdBackend({ apiKey: "k" });
-  const resolved = resolveBackend([mockBackend, zbd], "not-a-real-backend");
-  assert.equal(resolved.id, "zbd");
+  assert.throws(() => resolveBackend([mockBackend, zbd], "not-a-real-backend"), /unavailable/);
+  assert.throws(() => resolveBackend([mockBackend, zbdBackend()], "zbd"), /unavailable/);
+  assert.equal(resolveBackend([mockBackend, zbd], "zbd").id, "zbd");
 });
 
 test("resolveBackend(): falls all the way through to mock when nothing else is configured", () => {
@@ -137,4 +138,47 @@ test("onchainBackend plans on paper, refuses without a mandate, and clears only 
   mandated = true;
   assert.equal((await backend.settle({ id: "r1" }, { receipt: { transaction: "0x1", readings: [{}] } })).cleared, false);
   assert.equal((await backend.settle({ id: "r1" }, { receipt: { transaction: "0x1", readings: [{}, {}] } })).cleared, true);
+});
+
+test("funds invariant refuses a real backend BEFORE its potential payout side effect", async () => {
+  const ledger=createLedger();
+  let sent=0;
+  const provider={id:"spy",configured:true,async settle(){sent++;return {cleared:true,detail:"sent"};}};
+  const noFunds=await authorizeSettlement(ledger,provider,{id:"award-1",
+    direction:"payout",account:"actor:a",principal:"a",beneficiary:"wallet:a",
+    amount:"17",commodity:"SATS",sourceEventId:"game:m1"},DATE);
+  assert.equal(noFunds.cleared,false);
+  assert.equal(sent,0,"the backend must never send a liability it cannot fund");
+  assert.equal(ledger.all().length,0);
+});
+
+test("a reused settlement ID must match principal, beneficiary, amount, origin, commodity, rail and direction", async () => {
+  const ledger=createLedger();
+  const first={id:"earned-1",direction:"purchase",account:"actor:a",
+    principal:"principal:a",beneficiary:"wallet:a",sourceEventId:"match:1",
+    merchant:"m",amount:"10",commodity:"SATS"};
+  await authorizeSettlement(ledger,mockBackend,first,DATE);
+  assert.equal(ledger.all().length,1);
+  const exact=await authorizeSettlement(ledger,mockBackend,{...first},DATE);
+  assert.equal(exact.cleared,true);
+  assert.equal(exact.detail,"already settled");
+  let backendCalls=0;
+  const backend={...mockBackend,async settle(){backendCalls++;return {cleared:true};}};
+  const mutations=[
+    {account:"actor:b"},{principal:"principal:b"},{beneficiary:"wallet:b"},
+    {amount:"11"},{commodity:"USD"},{sourceEventId:"match:2"},{merchant:"other"},
+    {direction:"payout"},
+  ];
+  for(const change of mutations){
+    const result=await authorizeSettlement(ledger,backend,{...first,...change},DATE);
+    assert.equal(result.cleared,false,JSON.stringify(change));
+    assert.match(result.detail,/idempotency-conflict/);
+  }
+  const other={...mockBackend,id:"other-provider",async settle(){backendCalls++;return {cleared:true};}};
+  const wrongRail=await authorizeSettlement(ledger,other,first,DATE);
+  assert.equal(wrongRail.cleared,false);
+  assert.equal(backendCalls,0,"no redirect or duplicate provider effect");
+  assert.equal(ledger.all().length,1);
+  assert.equal(ledger.all()[0].settlement.beneficiary,"wallet:a");
+  assert.equal(ledger.all()[0].settlement.sourceEventId,"match:1");
 });

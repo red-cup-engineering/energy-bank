@@ -128,12 +128,15 @@ export function onchainBackend({ id = "onchain", configured = false, plan, autho
 
 // ── registry ─────────────────────────────────────────────────────────────────────────
 
-/** The best backend for a request: the requested one if configured, else the first other
- *  configured backend, else `mock` if present. Mirrors flickering-delve's `Payments.resolve`. */
+/** Choose an explicit requested backend OR refuse. Never silently replace a
+ * real payer/payee's selected rail with mock or another provider. An absent
+ * explicit choice retains the development registry's historical discovery
+ * behavior, but is never an authorization to advertise actual earnings. */
 export function resolveBackend(backends, requestedId) {
   if (requestedId !== undefined) {
     const found = backends.find((b) => b.id === requestedId);
     if (found !== undefined && found.configured) return found;
+    throw new RangeError("resolveBackend: requested provider is unavailable: " + String(requestedId));
   }
   const configured = backends.find((b) => b.configured && b.id !== "mock");
   if (configured !== undefined) return configured;
@@ -160,7 +163,18 @@ function settlementEntry(request, date, backendId) {
           { account: `expenses:payout:${backendId}`, amount, commodity },
           { account: `assets:cash:${backendId}`, amount: `-${amount}`, commodity },
         ];
-  return { date, narration: `${backendId} ${direction}: ${request.account} (${id})`, ref: id, postings };
+  // Preserve the right principal, beneficiary and origin with the money
+  // posting itself. Replayed request IDs may not redirect a paid obligation.
+  // This metadata is not journal narration and holds no provider secret.
+  const settlement = Object.freeze({
+    backendId, direction, account: request.account, commodity, amount,
+    principal: request.principal ?? null,
+    beneficiary: request.beneficiary ?? null,
+    sourceEventId: request.sourceEventId ?? null,
+    merchant: request.merchant ?? null,
+  });
+  return { date, narration: `${backendId} ${direction}: ${request.account} (${id})`,
+    ref: id, postings, settlement };
 }
 
 /** Settle a request against a backend, and — only once actually cleared — record the
@@ -168,15 +182,34 @@ function settlementEntry(request, date, backendId) {
  *  simulated against a scratch copy of the ledger first and refused if it would break
  *  `verifyPayoutInvariant`; nothing about `ledger` is mutated when refused. */
 export async function authorizeSettlement(ledger, backend, request, date, evidence) {
-  if (ledger.has(request.id)) return { cleared: true, detail: "already settled" };
+  // Resolve every repeated ID against the original exact obligation BEFORE
+  // touching a provider. A second beneficiary/amount/principal/rail is a
+  // conflict, not a successful replay and certainly not a new transfer.
+  const previous = ledger.all().find((entry) => entry.ref === request.id);
+  const entry = settlementEntry(request, date, backend.id);
+  if (previous) {
+    const same = JSON.stringify(previous.settlement) === JSON.stringify(entry.settlement)
+      && JSON.stringify(previous.postings) === JSON.stringify(entry.postings);
+    return same
+      ? { cleared: true, detail: "already settled" }
+      : { cleared: false, detail: "idempotency-conflict: an existing payment has different terms" };
+  }
+
+  // A backend can actually transfer money. Refuse unfunded payout BEFORE
+  // invoking it, not after the provider reports that value has already moved.
+  if (request.direction === "payout") {
+    const before = verifyPayoutInvariant(createLedger([...ledger.all(), entry]));
+    if (!before.holds) return { cleared: false, detail: `refused: ${before.detail}` };
+  }
   const result = await backend.settle(request, evidence);
   if (!result.cleared) return result;
 
-  const entry = settlementEntry(request, date, backend.id);
+  // Reconfirm accounting before committing the provider's received effect;
+  // the installed payment service must still serialize treasury writes.
   if (request.direction === "payout") {
-    const scratch = createLedger([...ledger.all(), entry]);
-    const check = verifyPayoutInvariant(scratch);
-    if (!check.holds) return { cleared: false, detail: `refused: ${check.detail}` };
+    const after = verifyPayoutInvariant(createLedger([...ledger.all(), entry]));
+    if (!after.holds) return { cleared: false,
+      detail: `provider-cleared-but-ledger-unfunded: ${after.detail}` };
   }
   ledger.record(entry);
   return result;
