@@ -1,6 +1,6 @@
 {
   "name": "@red-cup-engineering/energy-bank",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "type": "module",
   "description": "Shared identity and a double-entry ENERGY/credits ledger for every 561 game: guest/durable accounts, an append-only balanced-postings ledger weighed in exact decimal arithmetic at any commodity's own precision, executable invariant checks (books balance, no negative balances without an explicit credit line, payouts never exceed verified revenue in the same commodity), player-to-player transfer and pooling, and a pluggable settlement-backend interface (an in-memory mock plus a ZBD/Lightning-shaped stub) that an on-chain backend can join later with no schema change.",
   "keywords": [
@@ -23,9 +23,9 @@
     "test": "node --test src/*.test.mjs"
   },
   "dependencies": {
-    "@red-cup-engineering/computer-text-content-engineering-services-section": "workspace:*",
-    "@red-cup-engineering/cryptographic-computer-data-engineering-services-section": "workspace:*",
-    "@red-cup-engineering/computer-data-engineering-services-section": "workspace:*"
+    "@red-cup-engineering/computer-text-content-engineering-services-section": "0.1.0",
+    "@red-cup-engineering/cryptographic-computer-data-engineering-services-section": "0.3.1",
+    "@red-cup-engineering/computer-data-engineering-services-section": "0.2.0"
   },
   "exports": {
     "./decimal": {
@@ -55,5 +55,6 @@
   "files": [
     "src",
     "README.md"
-  ]
+  ],
+  "private": false
 }
