@@ -15,8 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/red-cup-engineering/bare-cedar-fog.git",
-    "directory": "services/561-group/services/engineering-services-section/services/computer-engineering-services-section/services/computer-systems-engineering-services-section/services/computer-game-system-services-section/services/energy-bank"
+    "url": "git+https://github.com/red-cup-engineering/energy-bank.git"
   },
   "scripts": {
     "check": "for f in src/*.mjs; do node --check \"$f\" || exit 1; done",
